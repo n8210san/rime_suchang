@@ -1,7 +1,7 @@
 --[[
 filter_sentence_restriction.lua
-2026-06-07 v21: 物理字數階梯排序 (Physical Length Ladder)
-修正：廢除類型偏見，單字(1) > 短詞(2) > 長詞(3+) 絕對鎖死
+2026-06-07 v22: 連打優先排序引擎 (Phrase-First Engine)
+目標：帳密/很多(2字) > 單字 > 生字/補全
 --]]
 
 local function utf8_len(s)
@@ -11,9 +11,10 @@ end
 
 local function filter(input, env)
   local input_str = env.engine.context.input
+  local input_len = string.len(input_str)
   
-  -- v21 物理長度分層
-  local t1, t2, t3, t4 = {}, {}, {}, {}
+  -- v22 分層：Tier 2 包含連打詞與字典字，Tier 3 為生字與聯想
+  local t1, t2, t3 = {}, {}, {}
   local max_output = 45
   local iterated = 0
   local prefetch_limit = 200
@@ -26,38 +27,46 @@ local function filter(input, env)
     local t_len = utf8_len(text)
     local item = { cand = cand, quality = quality, len = t_len, index = iterated }
 
-    -- 🌟 v21 物理分層邏輯：字數為王
+    -- 🌟 v22 精確分層
     if quality >= 9000.0 or c_type == "custom_phrase" then
       table.insert(t1, item)
-    elseif t_len == 1 then
-      -- Tier 2: 所有的單字 (誠/中/帳/記/𧥤)
-      table.insert(t2, item)
-    elseif t_len == 2 then
-      -- Tier 3: 所有的二字短詞 (帳密/確認)
+    elseif c_type == "completion" or (c_type == "sentence" and t_len > 3) then
+      -- Tier 3: 生字 (completion) 與 系統長句子
       table.insert(t3, item)
     else
-      -- Tier 4: 三字以上長詞 (史瓦辛格/調研報告/設計方案)
-      table.insert(t4, item)
+      -- Tier 2: 字典詞、已選詞、以及短的造句 (帳密)
+      table.insert(t2, item)
     end
 
     if iterated >= prefetch_limit then break end
   end
 
-  -- 排序邏輯：同層內按品質
-  local function compare_v21(a, b)
+  -- 🌟 v22 排序：連打優先 (Phrase > Single)
+  local function compare_v22(a, b)
+    if input_len >= 3 then
+      -- 長輸入時：2字詞 > 1字詞
+      local a_score = (a.len == 2) and 2 or (a.len == 1 and 1 or 0)
+      local b_score = (b.len == 2) and 2 or (b.len == 1 and 1 or 0)
+      if a_score ~= b_score then return a_score > b_score end
+    else
+      -- 短輸入時：1字詞 > 2字詞
+      local a_score = (a.len == 1) and 2 or (a.len == 2 and 1 or 0)
+      local b_score = (b.len == 1) and 2 or (b.len == 2 and 1 or 0)
+      if a_score ~= b_score then return a_score > b_score end
+    end
+    
     if math.abs(a.quality - b.quality) > 1e-12 then
       return a.quality > b.quality
     end
     return a.index < b.index
   end
 
-  table.sort(t2, compare_v21)
-  table.sort(t3, compare_v21)
-  table.sort(t4, compare_v21)
+  table.sort(t2, compare_v22)
+  table.sort(t3, compare_v22)
 
   -- 統一輸出
   local total_yielded = 0
-  for _, t in ipairs({t1, t2, t3, t4}) do
+  for _, t in ipairs({t1, t2, t3}) do
     for i = 1, #t do
       if total_yielded >= max_output then break end
       yield(t[i].cand)
