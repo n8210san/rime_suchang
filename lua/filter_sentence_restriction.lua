@@ -196,17 +196,22 @@ local function compare_tier2(a, b)
     return a_sym < b_sym
   end
   
-  -- 2) 依據智慧自適應得分由高到低排序
+  -- 2) 字根差分桶遞增模型排序 (len_diff 越小越靠前)
+  if a.len_diff ~= b.len_diff then
+    return a.len_diff < b.len_diff
+  end
+  
+  -- 3) 依據智慧自適應得分由高到低排序 (在同一個分桶內排序)
   if math.abs(a.score - b.score) > 1e-12 then
     return a.score > b.score
   end
   
-  -- 3) 若分數非常接近，則依據 sucang.dict.yaml 最早出現的行號由小到大排序 (保持原始順序)
+  -- 4) 若分數非常接近，則依據 sucang.dict.yaml 最早出現的行號由小到大排序 (保持原始順序)
   if a.line ~= b.line then
     return a.line < b.line
   end
   
-  -- 4) 穩定排序 Tie-breaker
+  -- 5) 穩定排序 Tie-breaker
   return a.index < b.index
 end
 
@@ -229,9 +234,10 @@ local function filter(input, env)
     end
   end
 
-  -- 智慧懶加載設定：前 20 個非丟棄候選字進行快取與排序
+  -- 智慧懶加載與輸出計數設定
   local sort_threshold = 20
   local count = 0
+  local total_yielded = 0
   local flushed = false
 
   local function flush_sorted_cands()
@@ -266,17 +272,25 @@ local function filter(input, env)
     
     -- 1. 輸出 Tier 1 (置頂)
     for i = 1, #tier1 do
+      if total_yielded >= 45 then break end
       yield(tier1[i].cand)
+      total_yielded = total_yielded + 1
     end
     
     -- 2. 輸出 Tier 2 (字典核心與精確字)
     for i = 1, #tier2 do
+      if total_yielded >= 45 then break end
       yield(tier2[i].cand)
+      total_yielded = total_yielded + 1
     end
     
-    -- 3. 輸出 Tier 3
-    for i = 1, #tier3 do
-      yield(tier3[i].cand)
+    -- 3. 輸出 Tier 3 (補滿至 45 個)
+    if total_yielded < 45 then
+      for i = 1, #tier3 do
+        if total_yielded >= 45 then break end
+        yield(tier3[i].cand)
+        total_yielded = total_yielded + 1
+      end
     end
   end
 
@@ -286,6 +300,11 @@ local function filter(input, env)
   for cand in input:iter() do
     iterated = iterated + 1
     if iterated > safety_max_iterated then
+      break
+    end
+    
+    -- 只要總輸出已達 45 個，立刻結束遍歷，不再浪費效能
+    if total_yielded >= 45 then
       break
     end
     
@@ -324,6 +343,11 @@ local function filter(input, env)
       end
       local score = quality - (utf8_len(text) - 1) * penalty
       
+      -- 計算字根差分桶 (Key Length Incremental)
+      local code_len = word_code and string.len(word_code) or 0
+      local input_len = string.len(input_str)
+      local len_diff = math.max(0, code_len - input_len)
+      
       local item = {
         cand = cand,
         text = text,
@@ -334,7 +358,8 @@ local function filter(input, env)
         is_symbol = is_symbol,
         weight = dict_info and dict_info.weight or 0,
         line = dict_info and dict_info.line or 999999,
-        score = score
+        score = score,
+        len_diff = len_diff
       }
       
       if is_target_debug then
@@ -366,11 +391,30 @@ local function filter(input, env)
           flush_sorted_cands()
         end
       else
-        -- 第 21 個候選字之後，直接輸出
+        -- 第 21 個候選字之後的處理
         if not flushed then
           flush_sorted_cands()
         end
-        yield(cand)
+        
+        -- 重複安全檢查，防止多重執行流溢出
+        if total_yielded >= 45 then
+          break
+        end
+        
+        local is_tier1 = (quality >= 9000.0 or c_type == "custom_phrase")
+        local is_tier2 = (dict_info ~= nil and c_type ~= "completion")
+        
+        if is_tier1 or is_tier2 then
+          -- Tier 1 和 Tier 2 隨時允許輸出，只要未滿 45
+          yield(cand)
+          total_yielded = total_yielded + 1
+        else
+          -- Tier 3 的候選字，只有在總數未滿 45 時才流式輸出
+          if total_yielded < 45 then
+            yield(cand)
+            total_yielded = total_yielded + 1
+          end
+        end
       end
     else
       if is_target_debug then
