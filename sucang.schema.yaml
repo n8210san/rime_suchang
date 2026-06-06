@@ -50,14 +50,17 @@ engine:
     - punct_segmentor
     - affix_segmentor@english  # 英文分段器
     - fallback_segmentor
-  "engine/translators/@0": table_translator
   translators:
+    - table_translator@custom_phrase
+    - table_translator@custom_phrase_private
     - table_translator
+    - table_translator@sucang_sentence
     - punct_translator
-    - script_translator@lua_custom_phrase # 沒有成功
-    - table_translator@english  # 英文翻譯器
-    - table_translator@sucang_phrase # 沒有成功
+    - script_translator@lua_custom_phrase
+    - table_translator@english
+    - table_translator@sucang_phrase
   filters:
+    - lua_filter@sentence_restriction
     - simplifier
     - uniquifier
     - charset_filter
@@ -76,11 +79,11 @@ translator:
   enable_encoder: true
   encode_commit_history: true
   max_phrase_length: 10  # 支援最多10字詞組
-  enable_completion: true # 改為 false 以嘗試解決 "arac" 總是優先於 "問題" 的問題 -- 成功
-  enable_sentence: true
+  enable_completion: false
+  enable_sentence: false
   enable_user_dict: true
   user_dict: sucang_user
-  initial_quality: 100 # 好像有用，成功了
+  initial_quality: 200
   
 # 英文輸入模組
 english:
@@ -143,3 +146,30 @@ recognizer:
     english: "^[a-z]{3,}[ ]?$" # 只取3碼以上, 以免跟速成衝突
     # 標點符號
     punct: "^/([0-9]0?|[a-z]+)$"
+
+# 句子/聯想補全翻譯器（降低品質，與主翻譯器分離，解決 20 個候選項截斷問題）
+sucang_sentence:
+  dictionary: sucang
+  enable_sentence: true
+  enable_completion: true
+  enable_user_dict: true
+  user_dict: sucang_user
+  initial_quality: 50
+
+# 原生自訂短語設定
+custom_phrase:
+  dictionary: ""
+  user_dict: custom_phrase
+  db_class: stabledb
+  enable_completion: false
+  enable_sentence: false
+  initial_quality: 10000
+
+# 私人自訂短語設定
+custom_phrase_private:
+  dictionary: ""
+  user_dict: custom_phrase_private
+  db_class: stabledb
+  enable_completion: false
+  enable_sentence: false
+  initial_quality: 10000

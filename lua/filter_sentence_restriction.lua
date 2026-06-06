@@ -211,26 +211,76 @@ local function compare_tier2(a, b)
 end
 
 local function filter(input, env)
-  local tier1 = {} -- 第 1 層：自定義置頂 (custom_phrase.txt 或 quality >= 9000)
-  local tier2 = {} -- 第 2 層：主詞典 sucang.dict.yaml 的精確匹配字詞 (非補全)
-  local tier3 = {} -- 第 3 層：其餘候選（包含 easy_en_lower.dict.yaml 英文單字、補全、聯想句、生僻倉頡字）
+  local tier1 = {}
+  local tier2 = {}
+  local tier3 = {}
 
   local input_str = env.engine.context.input
   local is_target_debug = (input_str == "g" or input_str == "gg" or input_str == "nt" or input_str == "el" or input_str == "qn" or input_str == "qnat" or input_str == "book" or input_str == "mgyp")
+  
+  local appdata = os.getenv("APPDATA")
+  local debug_log_path = (appdata or "C:\\Users\\kj\\AppData\\Roaming") .. "\\Rime\\lua_debug.log"
+  
   if is_target_debug then
-    local debug_file = io.open("C:\\Users\\KJ\\AppData\\Roaming\\Rime\\lua_debug.log", "a")
+    local debug_file = io.open(debug_log_path, "a")
     if debug_file then
       debug_file:write(string.format("\n--- DEBUG START FOR INPUT: %s ---\n", input_str))
       debug_file:close()
     end
   end
 
-  -- 🌟 智慧懶加載動態限制：我們最多只收集能填滿 45 個候選字（5 頁 * 9 候選字）的有效額度。
-  -- 不論前方有多少不符規則的動態聯想句被過濾丟棄，我們都會向後繼續尋找，直到收集滿 45 個有效候選字為止。
-  -- 這樣既保證了首頁與後續分頁有充足且優質的候選字（最多 45 個），又實現了真正的「按需懶加載」，彻底消成了卡頓。
-  local max_accepted = 45
-  local safety_max_iterated = 3000 -- 防止極端情況下無限迴圈的安全閾值
+  -- 智慧懶加載設定：前 20 個非丟棄候選字進行快取與排序
+  local sort_threshold = 20
   local count = 0
+  local flushed = false
+
+  local function flush_sorted_cands()
+    if flushed then return end
+    flushed = true
+    
+    -- 對 Tier 1 與 Tier 2 進行高速排序 (Tier 3 保持 Rime 預設順序)
+    table.sort(tier1, compare_tier1)
+    table.sort(tier2, compare_tier2)
+    
+    if is_target_debug then
+      local debug_file = io.open(debug_log_path, "a")
+      if debug_file then
+        debug_file:write("--- AFTER CLASSIFICATION & SORTING ---\n")
+        debug_file:write(string.format("Tier 1 size: %d, Tier 2 size: %d, Tier 3 size: %d\n", #tier1, #tier2, #tier3))
+        debug_file:write("--- Tier 1 candidates: ---\n")
+        for i = 1, #tier1 do
+          debug_file:write(string.format("[%d] %s (score: %f, weight: %s, line: %s, type: %s)\n", i, tier1[i].text, tier1[i].score or 0, tostring(tier1[i].weight), tostring(tier1[i].line), tier1[i].type))
+        end
+        debug_file:write("--- Tier 2 candidates: ---\n")
+        for i = 1, #tier2 do
+          debug_file:write(string.format("[%d] %s (score: %f, weight: %s, line: %s, type: %s)\n", i, tier2[i].text, tier2[i].score or 0, tostring(tier2[i].weight), tostring(tier2[i].line), tier2[i].type))
+        end
+        debug_file:write("--- Tier 3 candidates (first 10 shown): ---\n")
+        for i = 1, math.min(#tier3, 10) do
+          debug_file:write(string.format("[%d] %s (weight: %s, line: %s, type: %s)\n", i, tier3[i].text, tostring(tier3[i].weight), tostring(tier3[i].line), tier3[i].type))
+        end
+        debug_file:write("--- DEBUG END ---\n")
+        debug_file:close()
+      end
+    end
+    
+    -- 1. 輸出 Tier 1 (置頂)
+    for i = 1, #tier1 do
+      yield(tier1[i].cand)
+    end
+    
+    -- 2. 輸出 Tier 2 (字典核心與精確字)
+    for i = 1, #tier2 do
+      yield(tier2[i].cand)
+    end
+    
+    -- 3. 輸出 Tier 3
+    for i = 1, #tier3 do
+      yield(tier3[i].cand)
+    end
+  end
+
+  local safety_max_iterated = 5000
   local iterated = 0
 
   for cand in input:iter() do
@@ -238,144 +288,104 @@ local function filter(input, env)
     if iterated > safety_max_iterated then
       break
     end
+    
     local text = cand.text or ""
     local quality = cand.quality or 0
     local c_type = cand.type or ""
+    
+    local is_symbol = is_pure_symbol_cached(text)
+    
+    -- 提取候選字的編碼 (從 cand.comment 中提取字母，若無則用當前輸入)
+    local cand_code = cand.comment and string.match(cand.comment, "([a-z]+)")
+    local word_code = cand_code or env.engine.context.input
+    
+    local dict_info = nil
+    if word_code then
+      dict_info = dict_entries[text .. "_" .. word_code]
+    end
+    if not dict_info then
+      dict_info = dict_entries[text]
+    end
+    
+    -- 判定是否為未匹配的中文詞組
+    local is_chinese_phrase = (utf8_len(text) >= 2) and contains_chinese(text)
+    local is_unmatched_chinese_phrase = is_chinese_phrase and (dict_info == nil)
+    
+    -- 🌟 如果輸入長度 <= 4，且候選字是未匹配的動態中文詞組（聯想/智慧句），則完全過濾丟棄，絕不上屏！
+    local should_discard = (string.len(input_str) <= 4) and is_unmatched_chinese_phrase
+    
+    if not should_discard then
+      count = count + 1
       
-      local is_symbol = is_pure_symbol_cached(text)
-      
-      -- 提取候選字的編碼 (從 cand.comment 中提取字母，若無則用當前輸入)
-      local cand_code = cand.comment and string.match(cand.comment, "([a-z]+)")
-      local word_code = cand_code or env.engine.context.input
-      
-      local dict_info = nil
-      if word_code then
-        dict_info = dict_entries[text .. "_" .. word_code]
+      -- 計算長度加權分數 (雙軌自適應懲罰)
+      local penalty = 1e-9
+      if c_type == "user_table" then
+        penalty = 0.01
       end
-      if not dict_info then
-        dict_info = dict_entries[text]
-      end
+      local score = quality - (utf8_len(text) - 1) * penalty
       
-      -- 判定是否為未匹配的中文詞組
-      local is_chinese_phrase = (utf8_len(text) >= 2) and contains_chinese(text)
-      local is_unmatched_chinese_phrase = is_chinese_phrase and (dict_info == nil)
+      local item = {
+        cand = cand,
+        text = text,
+        quality = quality,
+        type = c_type,
+        index = count,
+        len = utf8_len(text),
+        is_symbol = is_symbol,
+        weight = dict_info and dict_info.weight or 0,
+        line = dict_info and dict_info.line or 999999,
+        score = score
+      }
       
-      -- 🌟 如果輸入長度 <= 4，且候選字是未匹配的動態中文詞組（聯想/智慧句），則完全過濾丟棄，絕不上屏！
-      local should_discard = (string.len(input_str) <= 4) and is_unmatched_chinese_phrase
-      
-      if not should_discard then
-        count = count + 1
-
-        local item = {
-          cand = cand,
-          text = text,
-          quality = quality,
-          type = c_type,
-          index = count,
-          len = utf8_len(text),
-          is_symbol = is_symbol,
-          weight = dict_info and dict_info.weight or 0,
-          line = dict_info and dict_info.line or 999999
-        }
-
-        if is_target_debug then
-          local debug_file = io.open("C:\\Users\\KJ\\AppData\\Roaming\\Rime\\lua_debug.log", "a")
-          if debug_file then
-            debug_file:write(string.format("[CAND %d] (accepted: %d) text: %s, type: %s, qual: %f, comment: %s, matched_code: %s, dict_weight: %s, dict_line: %s, is_chinese_phrase: %s, dict_info_nil: %s, should_discard: %s\n",
-              iterated, count, text, c_type, quality, tostring(cand.comment), tostring(word_code), 
-              tostring(dict_info and dict_info.weight or "nil"), tostring(dict_info and dict_info.line or "nil"),
-              tostring(is_chinese_phrase), tostring(dict_info == nil), tostring(should_discard)))
-            debug_file:close()
-          end
+      if is_target_debug then
+        local debug_file = io.open(debug_log_path, "a")
+        if debug_file then
+          debug_file:write(string.format("[CAND %d] (accepted: %d) text: %s, type: %s, qual: %f, score: %f, comment: %s, matched_code: %s, dict_weight: %s, dict_line: %s, should_discard: %s\n",
+            iterated, count, text, c_type, quality, score, tostring(cand.comment), tostring(word_code), 
+            tostring(dict_info and dict_info.weight or "nil"), tostring(dict_info and dict_info.line or "nil"),
+            tostring(should_discard)))
+          debug_file:close()
         end
-
-        -- 🌟 3-Tier 精確懶加載分類邏輯
+      end
+      
+      if count <= sort_threshold then
+        -- 收集並快取前 20 個非丟棄候選字
         local is_tier1 = (quality >= 9000.0 or c_type == "custom_phrase")
         
         if is_tier1 then
           table.insert(tier1, item)
         elseif dict_info ~= nil and c_type ~= "completion" then
-          -- Tier 2: 存在於主字典中，且不是聯想補全 (包含 table/user_table/以及滿足確切輸入的 sentence)
           table.insert(tier2, item)
         elseif string.match(text, "^[a-zA-Z%-'%.]+$") then
-          -- 🌟 英文單字（來自 easy_en_lower.dict.yaml）一律歸入 Tier 3
           table.insert(tier3, item)
         else
-          -- Tier 3: 倉頡生字 (dict_info == nil)、聯想補全 (completion)、或未上屏過非主字典的智慧字 (sentence)
           table.insert(tier3, item)
         end
-
-        -- 🌟 真正的按需懶加載中斷：一旦收集滿 45 個有效候選字，立即中斷，絕不浪費效能
-        if count >= max_accepted then
-          break
+        
+        if count == sort_threshold then
+          flush_sorted_cands()
         end
       else
-        if is_target_debug then
-          local debug_file = io.open("C:\\Users\\KJ\\AppData\\Roaming\\Rime\\lua_debug.log", "a")
-          if debug_file then
-            debug_file:write(string.format("[DISCARDED %d] text: %s, type: %s, qual: %f\n", iterated, text, c_type, quality))
-            debug_file:close()
-          end
+        -- 第 21 個候選字之後，直接輸出
+        if not flushed then
+          flush_sorted_cands()
+        end
+        yield(cand)
+      end
+    else
+      if is_target_debug then
+        local debug_file = io.open(debug_log_path, "a")
+        if debug_file then
+          debug_file:write(string.format("[DISCARDED %d] text: %s, type: %s, qual: %f\n", iterated, text, c_type, quality))
+          debug_file:close()
         end
       end
-  end
-
-  if is_target_debug then
-    local debug_file = io.open("C:\\Users\\KJ\\AppData\\Roaming\\Rime\\lua_debug.log", "a")
-    if debug_file then
-      debug_file:write("--- AFTER CLASSIFICATION & SORTING ---\n")
-      debug_file:write(string.format("Tier 1 size: %d, Tier 2 size: %d, Tier 3 size: %d\n", #tier1, #tier2, #tier3))
-      debug_file:write("--- Tier 1 candidates: ---\n")
-      for i = 1, #tier1 do
-        debug_file:write(string.format("[%d] %s (weight: %s, line: %s, type: %s)\n", i, tier1[i].text, tostring(tier1[i].weight), tostring(tier1[i].line), tier1[i].type))
-      end
-      debug_file:write("--- Tier 2 candidates: ---\n")
-      for i = 1, #tier2 do
-        debug_file:write(string.format("[%d] %s (weight: %s, line: %s, type: %s)\n", i, tier2[i].text, tostring(tier2[i].weight), tostring(tier2[i].line), tier2[i].type))
-      end
-      debug_file:write("--- Tier 3 candidates (first 10 shown): ---\n")
-      for i = 1, math.min(#tier3, 10) do
-        debug_file:write(string.format("[%d] %s (weight: %s, line: %s, type: %s)\n", i, tier3[i].text, tostring(tier3[i].weight), tostring(tier3[i].line), tier3[i].type))
-      end
-      debug_file:write("--- DEBUG END ---\n")
-      debug_file:close()
     end
   end
 
-  -- 對 Tier 1 與 Tier 2 進行高速排序 (Tier 3 保持 Rime 預設順序或懶加載原樣輸出)
-  table.sort(tier1, compare_tier1)
-  table.sort(tier2, compare_tier2)
-
-  local total_yielded = 0
-
-  -- 1. 輸出 Tier 1 (置頂)
-  for i = 1, #tier1 do
-    if total_yielded >= 45 then
-      break
-    end
-    yield(tier1[i].cand)
-    total_yielded = total_yielded + 1
-  end
-  
-  -- 2. 輸出 Tier 2 (字典核心詞與精確字)
-  for i = 1, #tier2 do
-    if total_yielded >= 45 then
-      break
-    end
-    yield(tier2[i].cand)
-    total_yielded = total_yielded + 1
-  end
-  
-  -- 🌟 3. 如果 Tier 1 + Tier 2 的候選字數量已經超過 45 個，則不載入/不輸出 Tier 3
-  if #tier1 + #tier2 <= 45 then
-    -- 輸出 Tier 3 (未選用智慧聯想與生僻字 - 限制總數不超過 45 個)
-    for i = 1, #tier3 do
-      if total_yielded >= 45 then
-        break
-      end
-      yield(tier3[i].cand)
-      total_yielded = total_yielded + 1
-    end
+  -- 如果迭代結束仍未達到 sort_threshold 個，則在此時輸出
+  if not flushed then
+    flush_sorted_cands()
   end
 end
 
