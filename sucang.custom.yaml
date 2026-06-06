@@ -1,0 +1,168 @@
+# 速倉輸入法自訂設定 - 用戶自訂補丁檔
+# encoding: utf-8
+# 這個檔案會覆蓋 default.yaml 的設定
+# 實測不會 修改或覆寫 schema.yaml 中的設定
+# 實測 *** 沒有優先於 sucang.schema.yaml *** 以 ":": [ "：", "：「」", ":" ] 的設定衝突證明
+
+patch:
+  # 多欄候選字選單設定 (2-3欄：第1欄候選單字，第2欄詞組)
+  "menu":
+    page_size: 9
+    alternative_select_keys: "123456789"
+    
+  # 候選字顯示格式 - 分欄顯示
+  "translator/preedit_format":
+    - "xform/^(.*)$/【$1】/"
+    
+  # 候選字註釋格式
+  "translator/comment_format":
+    - "xform/^(.*)$/〔$1〕/"
+    
+  # 自動學習功能設定
+  "translator/enable_encoder": true
+  "translator/encode_commit_history": true
+  "translator/enable_user_dict": true
+  "translator/user_dict": "sucang_user"
+  "translator/enable_sentence": false
+  
+  # 詞組連續輸入自動學習
+  "sucang_phrase/enable_encoder": true
+  "sucang_phrase/encode_commit_history": true
+  "sucang_phrase/enable_user_dict": true
+  "sucang_phrase/user_dict": "sucang_phrase_user"
+  
+  # 最大編碼長度和詞組長度
+  "speller/max_code_length": 10
+  "translator/max_phrase_length": 10
+  "sucang_phrase/max_phrase_length": 10
+  
+  # 自動上屏設定 (速成1-2碼自動上屏)
+  "speller/auto_select": true
+  "speller/auto_select_pattern": "^[a-z]{1,2}$"
+  
+  # 編碼提示設定
+  "translator/spelling_hints": 9
+  "translator/enable_completion": false
+  
+  # 字集過濾
+  "translator/enable_charset_filter": true
+  "charset_filter/option_name": "extended_charset"
+  
+  # 簡繁轉換
+  "simplifier/option_name": "simplification"
+  "simplifier/tips": "all"
+  
+  # 標點符號自訂
+  "punctuator/half_shape":
+    # "\": { commit: "\" } # 這樣設定無效，要用 \\ 轉義
+    # "\\": [ "\\", "、", "＼", "c" ] # 不成功！ 一定要在 sucang.schema.yaml 設定
+    ",": { commit: "，" }
+    ".": { commit: "。" }
+    ";": { commit: "；" }
+    ":": [ "：", "：「」", ":" ]
+    "?": { commit: "？" }
+    "!": { commit: "！" }
+    '"': { pair: [ """, """ ] }
+    "'": { pair: [ "'", "'" ] }
+    "(": { pair: [ "（", "）" ] }
+    "[": { pair: [ "「", "」" ] }
+    "{": { pair: [ "『", "』" ] }
+    "<": { pair: [ "《", "》" ] }
+  "punctuator/full_shape":
+    ":": [ "：", "：「」", ":" ]  # ？
+  
+  # 快捷鍵設定
+  "key_binder/bindings":
+    # Tab 鍵選擇第二候選
+    - { when: has_menu, accept: Tab, send: 2 }
+    # Shift+Tab 選擇第三候選  
+    - { when: has_menu, accept: Shift+Tab, send: 3 }
+    # 空格鍵確認英文輸入
+    - { when: composing, accept: space, send: space }
+    # 翻頁快捷鍵
+    - { when: has_menu, accept: minus, send: Page_Up }
+    - { when: has_menu, accept: equal, send: Page_Down }
+    # Ctrl+數字鍵快速選字
+    - { when: has_menu, accept: "Control+1", send: 1 }
+    - { when: has_menu, accept: "Control+2", send: 2 }
+    - { when: has_menu, accept: "Control+3", send: 3 }
+    # 清空編碼
+    - { when: composing, accept: "Control+BackSpace", send: Escape }
+    # 方法8：Ctrl+: 輸出帶引號冒號 -- 也沒用
+    # - { when: always, accept: "Control+colon", send: "：「」" }
+    
+  # 英文輸入模式設定
+  "english/enable_completion": true
+  "english/enable_sentence": false
+  "english/spelling_hints": 9
+  
+  # 識別器設定 - 自動識別輸入模式
+  "recognizer/patterns":
+    # 英文模式：字母+空格
+    # english: "^[a-z]+[ ]?$"
+    # 連續詞組模式：長編碼
+    sucang_phrase: "^[a-z]{6,10}$"
+    # 標點符號
+    punct: "^/([0-9]0?|[a-z]+)$"
+    # 方法6：雙冒號觸發帶引號冒號
+    double_colon: "^::$"
+    
+  # 輸出格式設定 - 支援多欄顯示
+  "style":
+    candidate_format: "%c. %@ %~"
+    # %c = 候選序號, %@ = 候選文字, %~ = 編碼提示
+    
+  # 候選字排序權重調整
+  "translator/initial_quality": 200  # 單字權重 1.2
+  "sucang_phrase/initial_quality": 50  # 詞組權重 1
+  "english/initial_quality": 0.001  # 降低英文權重
+  
+  # 自動學習觸發條件
+  "translator/enable_completion": false
+  "translator/sentence_over_completion": true
+
+
+  # 啟用過濾器
+  "engine/filters":
+    - lua_filter@sentence_restriction
+    - simplifier
+    - uniquifier
+    - charset_filter
+
+  # 增設並定義完整的翻譯器列表，確保單字與句子翻譯器並存
+  "engine/translators":
+    - table_translator@custom_phrase
+    - table_translator@custom_phrase_private
+    - table_translator
+    - table_translator@sucang_sentence
+    - punct_translator
+    - script_translator@lua_custom_phrase
+    - table_translator@english
+    - table_translator@sucang_phrase
+
+  # 原生自訂短語設定
+  "custom_phrase":
+    dictionary: ""
+    user_dict: custom_phrase
+    db_class: stabledb
+    enable_completion: false
+    enable_sentence: false
+    initial_quality: 10000
+
+  # 私人自訂短語設定
+  "custom_phrase_private":
+    dictionary: ""
+    user_dict: custom_phrase_private
+    db_class: stabledb
+    enable_completion: false
+    enable_sentence: false
+    initial_quality: 10000
+
+  # 句子/聯想補全翻譯器（降低品質，與主翻譯器分離，解決 20 個候選項截斷問題）
+  "sucang_sentence":
+    dictionary: sucang
+    enable_sentence: true
+    enable_completion: true
+    enable_user_dict: true
+    user_dict: sucang_user
+    initial_quality: 50

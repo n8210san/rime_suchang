@@ -1,0 +1,29 @@
+# 速倉連續詞組輸入詞典
+# encoding: utf-8
+---
+name: sucang_phrase
+version: "1.0"
+sort: by_weight
+use_preset_vocabulary: false
+max_phrase_length: 10
+columns:
+  - text
+  - code
+  - weight
+...
+# ===== 格式 是對的，但內容都是錯誤的，僅供測試 ===== 目前不生效
+# 格式：詞組	連續編碼	權重
+
+# 常用問候語
+你好嗎	nivdrf	1000	# ni(你) + v(好) + d(嗎) 的速成編碼連續輸入
+早安	dkam	800		# dk(早) + am(安)
+晚安	jdam	800		# jd(晚) + am(安)
+謝謝你	qiaiov	600	# qiai(謝謝) + ov(你)
+不客氣	mfqhfb	500	# mf(不) + qh(客) + fb(氣)
+
+# 常用短語
+沒問題	owjbsl	800	# ow(沒) + jb(問) + sl(題)
+沒關係	owjbhr	700	# ow(沒) + jb(關) + hr(係)
+對不起	ykmfqr	600	# yk(對) + mf(不) + qr(起)
+不好意思	mfvybt	500	# mf(不) + v(好) + yb(意) + t(思)
+

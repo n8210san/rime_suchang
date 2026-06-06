@@ -1,0 +1,145 @@
+# 速倉輸入法方案定義 - 方案的基礎設定檔
+# encoding: utf-8
+
+schema:
+  schema_id: sucang
+  name: "速倉"
+  version: "1.0"
+  author:
+    - kj <kj@example.com>
+  description: |
+    速倉輸入法 - 融合倉頡五代、速成、快倉和英文輸入
+    1. 支援倉頡五代(1-5碼)
+    2. 支援速成輸入法(1-2碼)
+    3. 支援快倉輸入法(特殊3碼和x.z鍵盤映射)
+    4. 支援連續輸入速成編碼組成詞組
+    5. 支援直接輸入英文單字和電腦指令
+  dependencies:
+    - sucang
+    - cangjie5
+    - easy_en_lower
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 西文 ]
+  - name: full_shape
+    states: [ 半角, 全角 ]
+  - name: ascii_punct
+    states: [ ，。, ，． ]
+  - name: simplification
+    reset: 0 
+    states: [ 繁體, 简体 ]
+  - name: extended_charset
+    states: [ 通用, 增廣 ]
+
+engine:
+  processors:
+    - key_binder
+    - ascii_composer
+    - recognizer
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - matcher
+    - ascii_segmentor
+    - abc_segmentor
+    - punct_segmentor
+    - affix_segmentor@english  # 英文分段器
+    - fallback_segmentor
+  "engine/translators/@0": table_translator
+  translators:
+    - table_translator
+    - punct_translator
+    - script_translator@lua_custom_phrase # 沒有成功
+    - table_translator@english  # 英文翻譯器
+    - table_translator@sucang_phrase # 沒有成功
+  filters:
+    - simplifier
+    - uniquifier
+    - charset_filter
+
+speller:
+  alphabet: 'abcdefghijklmnopqrstuvwxyz'
+  initials: 'abcdefghijklmnopqrstuvwxyz'
+  delimiter: " "
+  max_code_length: 10  # 支援最多10個字根
+  # auto_select: true    # 啟用自動上屏（速成模式） - 沒用
+  # auto_select_pattern: ^[a-z]{1,2}$  # 1-2碼速成自動上屏 - 沒用
+
+translator:
+  dictionary: sucang
+  enable_charset_filter: true
+  enable_encoder: true
+  encode_commit_history: true
+  max_phrase_length: 10  # 支援最多10字詞組
+  enable_completion: true # 改為 false 以嘗試解決 "arac" 總是優先於 "問題" 的問題 -- 成功
+  enable_sentence: true
+  enable_user_dict: true
+  user_dict: sucang_user
+  initial_quality: 100 # 好像有用，成功了
+  
+# 英文輸入模組
+english:
+  tag: english
+  dictionary: easy_en_lower  # 英文小寫詞典
+  spelling_hints: 9
+  enable_completion: true
+  enable_sentence: false
+  initial_quality: 0.01
+
+# 詞組連續輸入模組 -- 完全沒用
+sucang_phrase:
+  tag: sucang_phrase
+  dictionary: sucang_phrase
+  enable_user_dict: true
+  user_dict: sucang_phrase_user
+  enable_encoder: true
+  encode_commit_history: true
+  max_phrase_length: 10
+
+punctuator:
+  import_preset: symbols
+  half_shape:
+    # "\": [ "\\", "＼", "g", "sucang.schema.yaml優先於sucang.custom.yaml" ] # 這個設定無效，要如下轉義
+    # "\\": { commit: "\\" } # 原始值
+    # "\\": [ "、", "\\", "＼" ] # 符合預設值的多選設計
+    "\\": [ "\\", "＼", "、" ] # 使用 \ 優先以適用於 cli 換行
+    ',': { commit: '，' }
+    '.': { commit: '。' }
+    "'": { commit: "、" }  # 支援中文頓號
+    ";": { commit: "；" }
+    # ":": { commit: "：" } # 原始值
+    # ":": { commit: "：「」" } # 成功，但被迫一定要使用中文上下引號
+    ":": [ "：", "：「」", ":" ]  # 未被 sucang.custom.yaml 覆蓋時可以成功
+    '?': { commit: '？' }
+    '!': { commit: '！' }
+    '"': { pair: [ '"', '"' ] }
+    # "'": { pair: [ "'", "'" ] } # 停用以支援中文頓號
+  "punctuator/full_shape":
+    # ":": { commit: "\\" } # 無效的設定
+
+key_binder:
+  import_preset: default
+  bindings:
+    # Shift 單鍵切換中英文
+    - { when: always, accept: "Shift_Release", toggle: ascii_mode }
+    # 英文模式下使用半形空格
+    - { when: ascii_mode, accept: space, send: space }
+    # 中文模式英文輸入快捷鍵
+    - { when: composing, accept: space, send: space }
+    - { when: has_menu, accept: Tab, send: 2 }
+    # 候選字選單導航
+    - { when: has_menu, accept: minus, send: Page_Up }
+    - { when: has_menu, accept: equal, send: Page_Down }
+
+recognizer:
+  import_preset: default
+  patterns:
+    # 英文模式：直接輸入英文字母 + 空格
+    english: "^[a-z]{3,}[ ]?$" # 只取3碼以上, 以免跟速成衝突
+    # 標點符號
+    punct: "^/([0-9]0?|[a-z]+)$"

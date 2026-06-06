@@ -1,0 +1,46 @@
+# encoding: utf-8
+# 這個檔案會覆蓋 default.yaml 的設定
+customization:
+  distribution_code_name: Weasel
+  distribution_version: 0.17.4
+  generator: "Rime::SwitcherSettings"
+  modified_time: "Thu Oct 16 18:13:08 2025"
+  rime_version: 1.13.1
+patch:
+  menu/page_size: 8
+  "ascii_composer/switch_key":
+    Caps_Lock: commit_text
+    Shift_L: commit_code # 設定 commit_code →輸出英文(= enter) 並切換為英文
+    Shift_R: commit_text # 設定 commit_text →輸出中文(= space) 並切換為英文
+    # Shift_L 設定 inline_ascii →不切換中英也不輸出, 行內編輯英文                                                     
+  "key_binder/bindings":
+    - {accept: "Control+apostrophe", toggle: ascii_punct, when: always} # 增加 ctrl+' 切換 中文 全形半形
+    #
+    - {accept: "Control+Shift+1", select: .next, when: always} # 切換 下一個方案
+    - {accept: "Control+Shift+2", toggle: ascii_mode, when: always} # 切換 中英文模式
+    - {accept: "Control+Shift+3", toggle: full_shape, when: always} # 切換 全局 全形半形
+    - {accept: "Control+Shift+4", toggle: ascii_punct, when: always} # 切換 中文 全形半形
+    - {accept: "Control+Shift+5", toggle: simplification, when: always} # 切換 繁簡
+    - {accept: "Control+Shift+6", toggle: extended_charset, when: always} # 切換 ？
+    - {accept: "Control+Shift+X", select: sucang, when: always} # 切換到 速倉輸入法
+    # 跟上面一樣，只是容許Shift
+    - {accept: "Control+Shift+exclam", select: .next, when: always}
+    - {accept: "Control+Shift+at", toggle: ascii_mode, when: always}
+    - {accept: "Control+Shift+numbersign", toggle: full_shape, when: always}
+    - {accept: "Control+Shift+dollar", toggle: ascii_punct, when: always}
+    - {accept: "Control+Shift+percent", toggle: simplification, when: always}
+    - {accept: "Control+Shift+asciicircum", toggle: extended_charset, when: always}
+    #
+    - {accept: "Shift+space", toggle: ascii_mode, when: always} # 切換 中英文
+  schema_list:
+    - {schema: sucang}
+    - {schema: luna_pinyin_fluency}
+    - {schema: cangjie5_express}
+    - {schema: luna_pinyin_tw}
+    - {schema: bopomofo_tw}
+  "switcher/fix_schema_list_order": true
+  "switcher/hotkeys":
+    # caption: "[ 輸入法選單 ]" # 這行不對, 會當掉
+    - "Control+grave"       # Ctrl + `
+    - "Control+Shift+grave" # Ctrl + Shift + `
+    - F4
