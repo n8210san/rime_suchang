@@ -1,5 +1,36 @@
+# Rime 預設目錄
 build/
 *.userdb/
 sync/
 trash/
 *.log
+*.lnk
+
+# 忽略所有 YAML 和字典檔 (預設為不追蹤)
+*.yaml
+*.dict.yaml
+*.txt
+
+# --- 排除清單 (這些檔案必須追蹤) ---
+# 1. 核心方案配置 (6月修改相關)
+!sucang.schema.yaml
+!sucang.dict.yaml
+!sucang.custom.yaml
+!sucang_phrase.dict.yaml
+!default.custom.yaml
+!weasel.custom.yaml
+
+# 2. Lua 腳本與說明文件
+!lua/
+!rime.lua
+!debug_insights.md
+!README.md
+!README_FILTER_RESTRICTION.md
+!how_to_sort.md
+
+# 3. 必要的小型文本配置
+!custom_phrase.txt
+!lua_custom_phrase.txt
+
+# 4. 其他 Git 必要檔案
+!.gitignore
