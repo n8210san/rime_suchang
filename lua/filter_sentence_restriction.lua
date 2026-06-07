@@ -75,15 +75,29 @@ function filter(input, env)
     local d_info = (cand_code and dict_entries[text .. "_" .. cand_code]) or dict_entries[text]
     
     -- 計算得分與分桶 (Key Length Incremental)
-    local real_code_len = d_info and d_info.code_len or (cand_code and string.len(cand_code) or input_len)
+    local real_code_len
+    if d_info then
+      real_code_len = d_info.code_len
+    elseif cand_code then
+      real_code_len = string.len(cand_code)
+    elseif string.find(text, "^[a-zA-Z']+$") then
+      real_code_len = string.len(text)
+    else
+      if t_len > 1 then
+        real_code_len = input_len + t_len
+      else
+        real_code_len = input_len
+      end
+    end
     local len_diff = math.min(10, math.max(0, real_code_len - input_len))
     
     -- 判定 Tier
     local is_tier1 = (quality >= 9000.0 or c_type == "custom_phrase")
     
     -- 精確匹配 (len_diff == 0) 與 n+1 字根 (len_diff == 1)
-    local is_exact = (len_diff == 0)
-    local is_n_plus_1 = (len_diff == 1)
+    -- 排除 completion 類型以防 easy_en 英文單字或聯想詞搶占 Tier 2
+    local is_exact = (len_diff == 0) and (c_type ~= "completion")
+    local is_n_plus_1 = (len_diff == 1) and (c_type ~= "completion")
     
     -- High Priority (Tier 2) includes:
     -- 1. Exact matches (len_diff == 0)
@@ -115,8 +129,8 @@ function filter(input, env)
       count_tier3 = count_tier3 + 1
     end
 
-    -- 湊滿 54 個高權重候選，或者高優先權 + 低優先權滿 100 個，或迭代達 2000 次就中斷遍歷
-    if count_high_priority >= 54 or (count_high_priority + count_tier3 >= 100) or iterated >= 2000 then
+    -- 湊滿 54 個高權重候選，或者迭代達 2000 次就中斷遍歷（不因低優先權滿 100 個而提前中斷，防止中文單字被截斷）
+    if count_high_priority >= 54 or iterated >= 2000 then
       break
     end
   end
