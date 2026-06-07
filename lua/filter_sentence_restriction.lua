@@ -13,7 +13,6 @@ local function load_dict()
   local f = io.open(path, "rb")
   if not f then f = io.open("sucang.dict.yaml", "rb") end
   if not f then return end
-
   local in_header = true
   for line in f:lines() do
     line = string.gsub(line, "[\r\n]+$", "")
@@ -39,18 +38,25 @@ local function load_dict()
   dict_loaded = true
 end
 
+-- 修正點 1：正確實作並閉合 utf8_len 函數
 local function utf8_len(s)
   local _, count = string.gsub(s, "[^\128-\191]", "")
   return count
 end
 
-function filter(input, env)
+-- 修正點 2：讓 filter 獨立出來
+local function filter(input, env)
   if not dict_loaded then load_dict() end
-
   local input_str = env.engine.context.input
   local input_len = string.len(input_str)
   local initial_quality = 200.0
   local min_tier2_quality = initial_quality + 1e-8
+  
+  local dbg = io.open("C:\\Users\\KJ\\AppData\\Roaming\\Rime\\lua_debug.log", "a")
+  if dbg then
+    dbg:write(string.format("\n===================================\n"))
+    dbg:write(string.format("INPUT: %s, LEN: %d\n", input_str, input_len))
+  end
   
   local tier1_list = {}
   local tier2_buckets = {} -- buckets[0...10]
@@ -63,7 +69,6 @@ function filter(input, env)
   local iterated = 0
   local count_high_priority = 0
   local count_tier3 = 0
-
   for cand in input:iter() do
     iterated = iterated + 1
     local text, quality, c_type = cand.text or "", cand.quality or 0, cand.type or ""
@@ -92,10 +97,10 @@ function filter(input, env)
     local len_diff = math.min(10, math.max(0, real_code_len - input_len))
     
     -- 判定 Tier
-    local is_tier1 = (quality >= 9000.0 or c_type == "custom_phrase")
+    local is_tier1 = (quality >= 3000.0 or c_type == "custom_phrase")
     
     -- 精確匹配 (len_diff == 0) 與 n+1 字根 (len_diff == 1)
-    -- 排除 completion 類型以防 easy_en 英文單字或聯想詞搶占 Tier 2
+    -- 排除 completion 類型以防 easy_en 英文單字 or 聯想詞搶占 Tier 2
     local is_exact = (len_diff == 0) and (c_type ~= "completion")
     local is_n_plus_1 = (len_diff == 1) and (c_type ~= "completion")
     
@@ -117,7 +122,10 @@ function filter(input, env)
       index = iterated,
       is_exact = is_exact or (cand_code == input_str or text == input_str)
     }
-
+    if dbg then
+      dbg:write(string.format("[CAND] text: %s, type: %s, qual: %f, code_len: %d, diff: %d, tier1: %s, tier2: %s\n", 
+        text, c_type, quality, real_code_len or -1, len_diff, tostring(is_tier1), tostring(is_tier2)))
+    end
     if is_tier1 then
       table.insert(tier1_list, item)
       count_high_priority = count_high_priority + 1
@@ -128,20 +136,18 @@ function filter(input, env)
       table.insert(tier3_buckets[len_diff], item)
       count_tier3 = count_tier3 + 1
     end
-
     -- 湊滿 54 個高權重候選，或者迭代達 2000 次就中斷遍歷（不因低優先權滿 100 個而提前中斷，防止中文單字被截斷）
     if count_high_priority >= 54 or iterated >= 2000 then
+      if dbg then dbg:write(string.format("[BREAK] at iterated: %d, count_high: %d\n", iterated, count_high_priority)) end
       break
     end
   end
-
   -- 1. 排序 Tier 1 列表（完全命中優先）
   table.sort(tier1_list, function(a, b)
     if a.is_exact ~= b.is_exact then return a.is_exact end
     if math.abs(a.score - b.score) > 1e-12 then return a.score > b.score end
     return a.index < b.index
   end)
-
   -- 2. 排序 Tier 2 桶子
   local ordered_high_priority = {}
   -- 複製 Tier 1 進來
@@ -169,7 +175,6 @@ function filter(input, env)
       table.insert(ordered_high_priority, it)
     end
   end
-
   -- 3. 排序 Tier 3 桶子並合併成 ordered_tier3
   local ordered_tier3 = {}
   for d = 0, 10 do
@@ -182,11 +187,9 @@ function filter(input, env)
       table.insert(ordered_tier3, it)
     end
   end
-
   -- 4. 輸出與 Page-3 (27 字) 智慧分頁懶加載
   local yielded = 0
   local total_high = #ordered_high_priority
-
   if total_high > 27 then
     -- 情況 A：HighPriority 大於 3 頁 (27 個候選字)
     -- 前 3 頁（1~27 位）嚴格只輸出 HighPriority，保證常用字不受 Tier 3 雜訊干擾
@@ -219,6 +222,9 @@ function filter(input, env)
       yielded = yielded + 1
     end
   end
+  
+  -- 修正點 3：關閉除錯日誌檔案句柄
+  if dbg then dbg:close() end
 end
 
 return filter
