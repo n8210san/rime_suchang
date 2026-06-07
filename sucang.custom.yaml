@@ -165,4 +165,4 @@ patch:
     enable_completion: true
     enable_user_dict: true
     user_dict: sucang_user
-    initial_quality: 50
+    initial_quality: 1

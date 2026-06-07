@@ -31,6 +31,8 @@ encoder:
       formula: "AaBbCcDdEeFfGgHhIiJj"  # 4字以上：皆取字首 ???
   tail_anchor: "'"
 ...
+sucang.dict.yaml	sucang	3
+lua\filter_sentence_restriction.lua	lua	3
 
 # ----- Jpower 2026 區塊 -----
 
@@ -71,7 +73,62 @@ encoder:
 上屏	ymst	3
 沖水	ele	3
 記憶中	yuppl	3
-sucang.dict.yaml	sucang	3
+照單	afrj	3
+全收	ogvk	3
+詞頻	yryc	33
+
+# claude
+/locate-gatca-concept	loc	33
+/frontend-impl	fro	33
+/investigate-issue	inv	33
+/gatca-change-impl	gat	33
+/query-openspec	que	33
+/author-gatca-spec	aut	33
+/code-writer	cod	33
+/debug-gatca-pipeline	deb	33
+/sprint	spr	33
+/declarative-instructor	dec	33
+/safe-sql	saf	33
+/thin-content	thi	33
+/multi-agent-orchestrator-patterns	mul	33
+/cloudflare-email-service	clo	33
+/nav-recall	nav	33
+/author-gatca-spec-write	aut	33
+/gatca-change-workflow	gat	33
+/author-gatca-spec-preflight	aut	33
+/ops	ops	33
+/web-perf	web	33
+/session-digest	ses	33
+/agents-sdk	age	33
+/author-gatca-spec-review	aut	33
+/durable-objects	dur	33
+/workers-best-practices	wor	33
+/cloudflare	clo	33
+/sandbox-sdk	san	33
+/abstraction-ladder	abs	33
+/wrangler	wra	33
+/memory-housekeeping	mem	33
+/soak-mark	soa	33
+/reflect	ref	33
+/author-gatca-skill-or-prompt	aut	33
+/define-term	def	33
+/impact-chain	imp	33
+/gatca-smoke-test	gat	33
+/reflect-diagnose	ref	33
+/ops-debate	ops	33
+/notable	not	33
+claude	claude	9999
+claude --model default	cla	999
+claude --model haiku	haiku	999
+claude --model sonnet	son	999
+claude --settings ~/.claude/deepseek-settings.json	deepseek	999
+ --resume	res	99
+ --fork-session 	fork	99
+claude --resume	resume	99
+claude --settings ~/.claude/deepseek-settings.json --resume	resume 	333
+claude	cla	999
+Claude Code	claude	999
+TaskCreate	task	999
 
 # 生活
 是否	amr	999
@@ -250,25 +307,14 @@ freecj	freecj	100
 # 英文專有名詞
 milestone	mi	9999
 mi	mi	9990
-TaskCreate	task	999
-claude	claude	9999
-claude --model default	cla	999
-claude --model haiku	haiku	999
-claude --model sonnet	son	999
-claude --settings ~/.claude/deepseek-settings.json	deepseek	999
- --resume	res	99
- --fork-session 	fork	99
-claude --resume	resume	99
-claude --settings ~/.claude/deepseek-settings.json --resume	resume 	333
-claude	cla	999
-Claude Code	claude	999
-Gemini	gemini	99
-npx @google/gemini-cli	gemini	33
+openspec	openspec	4
 ChatGpt	chatgpt	4
 OpenAI	openclaw	4
 OpenClaw	openclaw	4
 OpenClaw	oc	4
-openspec	openspec	4
+Gemini	gemini	99
+npx @google/gemini-cli	gemini	33
+NotebookLM	not	11
 
 # AI agent
 說一堆都沒做！一直問，不知道在問什麼屁！我告訴你依你建議做，為什麼一堆廢話？	yumgg	33
@@ -384,34 +430,36 @@ openspec	openspec	4
 # 常用單字 -- 自訂 拆1碼
 ●	.	77777
 之	i	99999
-之間	iaa	999
-之類	ifc	999
-之處	iyn	999
 一	m	99999
-工	m	99999
-亞	m	99999
+工	m	88888
+亞	m	77777
 ✅	v	99999
 點	w	99999
 的	x	99999
-不	x	99999
+不	x	88888
 ❌	x	88888
 ●	x	77777
 這	y	99999
-些	y	99999
-高	y	99999
-過	y	99999
-語	y	99999
-卜	y	99999
-道	y	99999
-話	y	99999
-讚	y	99999
-誰	y	99999
+些	y	88888
+高	y	77777
+過	y	66666
+語	y	55555
+卜	y	44444
+道	y	44444
+話	y	33333
+讚	y	33333
+誰	y	33333
 我	z	99999
 ★	z	88888
 ●	z	77777
 ☂	z	66666
 ⭐	z	555
 
+# ----- 這 之 i 專區 ----
+之間	iaa	999
+之類	ifc	999
+之後	ihe	999
+之處	iyn	999
 # ----- 這 轉 y 專區 -----
 這句	ypr	999
 這句話	ypryr	999
@@ -10872,7 +10920,7 @@ openspec	openspec	4
 百	ma	33
 碟	md	33
 術	hn	33
-存	kd	33
+存	kd	505
 治	er	33
 況	eu	33
 示	mf	33
@@ -10941,7 +10989,7 @@ openspec	openspec	4
 館	or	33
 低	oi	33
 廣	ic	33
-呀	rh	33
+呀	rh	3333
 兵	oc	33
 顯	ac	33
 聖	sg	33
@@ -13227,7 +13275,6 @@ openspec	openspec	4
 隘	nt	33
 蹋	rm	33
 湛	ev	33
-晝	lm	33
 岫	uw	33
 蟄	gi	33
 樁	dx	33

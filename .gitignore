@@ -5,6 +5,8 @@ sync/
 trash/
 *.log
 *.lnk
+scratch/
+sucang_user.userdb.bak/
 
 # 忽略所有 YAML 和字典檔 (預設為不追蹤)
 *.yaml
