@@ -4,8 +4,8 @@
 記住禁止隨意改字典
 
 ## Rime 需求：
-Tier 1 = custom_phrase.txt
-Tier 2 = sucang.dict.yaml
+Tier 1 = custom_phrase.txt  ( + custom_phrase_private.txt 保護隱私個人字典 )
+Tier 2 = sucang.dict.yaml 
 超過45候選字不要再載入，Tier 3 未上屏的智慧字句 - 懶加載
 
 
@@ -14,6 +14,10 @@ Tier 2 = sucang.dict.yaml
 # 需求歷史（倒排，越上面越新）：
 
 ---
+注意第9次嘗試 v21/22 成功方案 
+輸入>=3碼強化連打 & <3碼 強化單字的區別
+
+--
 
 現在依然是無法實現
 輸入 h 無法精確出現單字根 竹。

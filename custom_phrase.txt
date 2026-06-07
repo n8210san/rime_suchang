@@ -1,4 +1,5 @@
 # Rime custom_phrase
+#竹	h	100
 之	i	100
 一	m	100
 工	m	90
@@ -14,6 +15,7 @@
 是	am	100
 法	ei	60
 第	hh	100
+#怎	hp	33
 和	hr	100
 寫	ix	10
 空	jm	100
